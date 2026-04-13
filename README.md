@@ -1,4 +1,4 @@
-# Blynk nRF9151 MQTT Sample
+# Blynk Nordic nRF9151 Firmware
 
 Connects an [nRF9151](https://www.nordicsemi.com/Products/nRF9151) to [Blynk](https://blynk.io) over LTE-M using MQTT.
 
