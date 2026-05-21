@@ -11,6 +11,7 @@
 LOG_MODULE_REGISTER(main);
 
 /* nRF Libraries */
+#include <nrf_modem_at.h>
 #include <modem/nrf_modem_lib.h>
 #include <modem/lte_lc.h>
 #include <modem/modem_info.h>
@@ -109,6 +110,27 @@ int main(void)
     if (err < 0) {
         LOG_ERR("Failed to init modem lib. (err: %i)", err);
         return err;
+    }
+
+    /* ── APN (manual override for networks that don't auto-provision) ────── */
+
+    const char *lte_apn = credentials_get_apn();
+
+    if (lte_apn[0] != '\0') {
+        LOG_INF("Applying APN: %s", lte_apn);
+        err = nrf_modem_at_printf("AT+CGDCONT=1,\"IP\",\"%s\"", lte_apn);
+        if (err) {
+            LOG_WRN("AT+CGDCONT failed: %d", err);
+        }
+        const char *lte_user = credentials_get_apn_user();
+
+        if (lte_user[0] != '\0') {
+            err = nrf_modem_at_printf("AT+CGAUTH=1,2,\"%s\",\"%s\"",
+                                      lte_user, credentials_get_apn_pass());
+            if (err) {
+                LOG_WRN("AT+CGAUTH failed: %d", err);
+            }
+        }
     }
 
     /* ── Cloud init ──────────────────────────────────────────────────────── */

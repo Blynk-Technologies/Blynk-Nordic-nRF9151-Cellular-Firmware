@@ -33,7 +33,8 @@ static const char cert[] = {
 #define MQTT_BROKER_PORT        8883
 #define MQTT_KEEPALIVE_S        600   /* 10 minutes */
 #define MQTT_CONNECT_TIMEOUT_MS 10000
-#define RECONNECT_DELAY_S       10
+#define RECONNECT_DELAY_MIN_S   1
+#define RECONNECT_DELAY_MAX_S   64
 
 /* ── Buffers ─────────────────────────────────────────────────────────────── */
 
@@ -57,6 +58,19 @@ static bool redirect_pending;
 static bool mqtt_connected;
 static bool fota_in_progress;
 static uint16_t msg_id_counter = 1;
+static int reconnect_delay_s = RECONNECT_DELAY_MIN_S;
+
+/* ── OTA deferred work ───────────────────────────────────────────────────── */
+
+static char ota_payload_copy[256];
+static size_t ota_payload_copy_len;
+static struct k_work ota_work;
+
+static void ota_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	handle_ota((const uint8_t *)ota_payload_copy, ota_payload_copy_len);
+}
 
 /* ── Mutex – protects MQTT client from concurrent poll/publish access ────── */
 
@@ -359,6 +373,7 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 		if (evt->result == 0) {
 			LOG_INF("MQTT CONNACK – connected to Blynk");
 			mqtt_connected = true;
+			reconnect_delay_s = RECONNECT_DELAY_MIN_S;
 			subscribe_topics();
 			publish_device_info();
 			if (first_connect) {
@@ -405,7 +420,9 @@ static void mqtt_evt_handler(struct mqtt_client *const c,
 
 		} else if (topic_len == sizeof("downlink/ota/json") - 1 &&
 			   strncmp(topic_utf8, "downlink/ota/json", topic_len) == 0) {
-			handle_ota(payload_buf, (size_t)rc);
+			ota_payload_copy_len = MIN((size_t)rc, sizeof(ota_payload_copy) - 1);
+			memcpy(ota_payload_copy, payload_buf, ota_payload_copy_len);
+			k_work_submit(&ota_work);
 
 		} else if (topic_len > sizeof("downlink/ds/") - 1 &&
 			   strncmp(topic_utf8, "downlink/ds/",
@@ -582,8 +599,10 @@ static void poll_thread_fn(void *p1, void *p2, void *p3)
 			}
 
 			if (!first_attempt) {
-				LOG_INF("Reconnecting in %ds…", RECONNECT_DELAY_S);
-				k_sleep(K_SECONDS(RECONNECT_DELAY_S));
+				LOG_INF("Reconnecting in %ds…", reconnect_delay_s);
+				k_sleep(K_SECONDS(reconnect_delay_s));
+				reconnect_delay_s = MIN(reconnect_delay_s * 2,
+							RECONNECT_DELAY_MAX_S);
 			}
 			first_attempt = false;
 
@@ -796,6 +815,7 @@ int cloud_init(void (*callback)(struct device_data *data))
 	}
 
 	cloud_callback = callback;
+	k_work_init(&ota_work, ota_work_handler);
 
 	strncpy(current_host, credentials_get_server(), BROKER_HOST_SIZE - 1);
 	current_host[BROKER_HOST_SIZE - 1] = '\0';
