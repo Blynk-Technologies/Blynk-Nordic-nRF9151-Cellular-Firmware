@@ -62,6 +62,8 @@ static int reconnect_delay_s = RECONNECT_DELAY_MIN_S;
 
 /* ── OTA deferred work ───────────────────────────────────────────────────── */
 
+static void handle_ota(const uint8_t *payload, size_t len);
+
 static char ota_payload_copy[256];
 static size_t ota_payload_copy_len;
 static struct k_work ota_work;
