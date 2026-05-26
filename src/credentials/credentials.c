@@ -107,6 +107,7 @@ int credentials_init(void)
 		LOG_WRN("  cred apn_pass <pass>    (optional, APN password)");
 		LOG_WRN("  cred show               (show current values)");
 		LOG_WRN("  cred clear              (erase all credentials)");
+		LOG_WRN("  cred reboot             (reboot the device)");
 		return -ENOENT;
 	}
 
@@ -141,7 +142,13 @@ static int cmd_cred_token(const struct shell *sh, size_t argc, char **argv)
 	strncpy(auth_token, argv[1], sizeof(auth_token) - 1);
 	auth_token[sizeof(auth_token) - 1] = '\0';
 	nvs_write(&fs, NVS_ID_AUTH_TOKEN, auth_token, strlen(auth_token) + 1);
-	shell_print(sh, "Auth token saved. Rebooting…");
+	shell_print(sh, "Auth token saved. Run 'cred reboot' to apply.");
+	return 0;
+}
+
+static int cmd_cred_reboot(const struct shell *sh, size_t argc, char **argv)
+{
+	shell_print(sh, "Rebooting…");
 	k_sleep(K_MSEC(200));
 	sys_reboot(SYS_REBOOT_COLD);
 	return 0;
@@ -240,7 +247,7 @@ static int cmd_cred_clear(const struct shell *sh, size_t argc, char **argv)
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(cred_cmds,
-	SHELL_CMD_ARG(token,    NULL, "Set Blynk auth token (reboots)",    cmd_cred_token,    2, 0),
+	SHELL_CMD_ARG(token,    NULL, "Set Blynk auth token",              cmd_cred_token,    2, 0),
 	SHELL_CMD_ARG(server,   NULL, "Set Blynk server host",             cmd_cred_server,   2, 0),
 	SHELL_CMD_ARG(template, NULL, "Set Blynk template ID",             cmd_cred_template, 2, 0),
 	SHELL_CMD_ARG(apn,      NULL, "Set LTE APN",                       cmd_cred_apn,      2, 0),
@@ -248,6 +255,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(cred_cmds,
 	SHELL_CMD_ARG(apn_pass, NULL, "Set APN password",                  cmd_cred_apn_pass, 2, 0),
 	SHELL_CMD_ARG(show,     NULL, "Show current credentials",          cmd_cred_show,     1, 0),
 	SHELL_CMD_ARG(clear,    NULL, "Erase all credentials (reboots)",   cmd_cred_clear,    1, 0),
+	SHELL_CMD_ARG(reboot,   NULL, "Reboot the device",                 cmd_cred_reboot,   1, 0),
 	SHELL_SUBCMD_SET_END
 );
 SHELL_CMD_REGISTER(cred, &cred_cmds, "Blynk credential management", NULL);
